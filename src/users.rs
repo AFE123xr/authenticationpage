@@ -48,7 +48,7 @@ impl std::fmt::Display for UserRole {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct User {
     pub username: String,
     pub email: String,
