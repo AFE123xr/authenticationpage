@@ -211,9 +211,8 @@ function renderAdminUserList(users) {
                 <td>${escapeHtml(user.email)}</td>
                 <td>${escapeHtml(user.role)}</td>
                 <td>
-                    <select class="role-select" 
-                            ${isSelf ? 'disabled title="You cannot change your own role"' : ''}
-                            onchange="updateUserRole('${escapeHtml(user.username)}', this.value)">
+                    <select class="role-select" data-username="${escapeHtml(user.username)}"
+                            ${isSelf ? 'disabled title="You cannot change your own role"' : ''}>
                         <option value="User" ${user.role === 'User' ? 'selected' : ''}>User</option>
                         <option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option>
                         <option value="Guest" ${user.role === 'Guest' ? 'selected' : ''}>Guest</option>
@@ -222,6 +221,15 @@ function renderAdminUserList(users) {
             </tr>
         `;
     }).join('');
+
+    // Attach event listeners to all role-select elements
+    body.querySelectorAll('.role-select').forEach(select => {
+        select.onchange = (e) => {
+            const username = select.getAttribute('data-username');
+            const newRole = e.target.value;
+            updateUserRole(username, newRole);
+        };
+    });
 }
 
 async function updateUserRole(username, newRole) {
