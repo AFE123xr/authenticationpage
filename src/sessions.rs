@@ -1,4 +1,4 @@
-use crate::users::load_users;
+use crate::users::{USER_FILE_LOCK, load_users};
 use rand::{Rng, distributions::Alphanumeric};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -176,7 +176,11 @@ impl SessionManager {
             }
 
             // Verify that the user still exists in the user store
-            let users = load_users();
+            let users = {
+                let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+                let _guard = lock.lock().await;
+                load_users()
+            };
             if !users.contains_key(&session.user_id) {
                 warn!(
                     target: "security",

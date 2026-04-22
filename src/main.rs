@@ -870,10 +870,13 @@ async fn api_list_documents(jar: CookieJar) -> impl IntoResponse {
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
             let users = crate::users::load_users();
             let is_admin = users
                 .get(&session.user_id)
                 .map_or(false, |u| u.role == crate::users::UserRole::Admin);
+            drop(_guard);
 
             let documents = if is_admin {
                 crate::documents::get_all_documents().await
@@ -949,6 +952,21 @@ async fn api_upload_document(jar: CookieJar, mut multipart: Multipart) -> impl I
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
+            let users = load_users();
+
+            if let Some(user) = users.get(&session.user_id) {
+                if user.role == UserRole::Guest {
+                    warn!(target: "security", "Guest user '{}' attempted to upload a document", session.user_id);
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Guests are not allowed to upload documents".to_string(),
+                    )
+                        .into_response();
+                }
+            }
+
             info!("Upload attempt by user: {}", session.user_id);
 
             loop {
@@ -1127,6 +1145,22 @@ async fn api_update_document(
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
+            let users = load_users();
+
+            if let Some(user) = users.get(&session.user_id) {
+                if user.role == UserRole::Guest {
+                    warn!(target: "security", "Guest user '{}' attempted to update document {}", session.user_id, id);
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Guests are not allowed to update documents".to_string(),
+                    )
+                        .into_response();
+                }
+            }
+            drop(_guard);
+
             // First check permissions without a long-held write lock
             if let Some(document) = get_document_by_id(&id).await {
                 let is_owner = document.uploaded_by == session.user_id;
@@ -1313,6 +1347,22 @@ async fn api_share_document(
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
+            let users = load_users();
+
+            if let Some(user) = users.get(&session.user_id) {
+                if user.role == UserRole::Guest {
+                    warn!(target: "security", "Guest user '{}' attempted to share document {}", session.user_id, id);
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Guests are not allowed to share documents".to_string(),
+                    )
+                        .into_response();
+                }
+            }
+            drop(_guard);
+
             // Validate role
             let role = payload.role.to_lowercase();
             if role != "viewer" && role != "editor" {
@@ -1427,6 +1477,22 @@ async fn api_unshare_document(
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
+            let users = load_users();
+
+            if let Some(user) = users.get(&session.user_id) {
+                if user.role == UserRole::Guest {
+                    warn!(target: "security", "Guest user '{}' attempted to manage document access for {}", session.user_id, id);
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Guests are not allowed to manage document access".to_string(),
+                    )
+                        .into_response();
+                }
+            }
+            drop(_guard);
+
             let unshare_result = crate::documents::with_document_mut(&id, |doc| {
                 // Only the owner can unshare
                 if doc.uploaded_by != session.user_id {
@@ -1506,10 +1572,13 @@ async fn api_download_document(
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
             let users = crate::users::load_users();
             let is_admin = users
                 .get(&session.user_id)
                 .map_or(false, |u| u.role == crate::users::UserRole::Admin);
+            drop(_guard);
 
             // First check authorization and get path
             let auth_check = if let Some(doc) = get_document_by_id(&id).await {
@@ -1624,6 +1693,22 @@ async fn api_delete_document(jar: CookieJar, AxumPath(id): AxumPath<String>) -> 
         let session_manager = SessionManager::new();
 
         if let Some(session) = session_manager.validate_session(token).await {
+            let lock = USER_FILE_LOCK.get_or_init(|| TokioMutex::new(()));
+            let _guard = lock.lock().await;
+            let users = load_users();
+
+            if let Some(user) = users.get(&session.user_id) {
+                if user.role == UserRole::Guest {
+                    warn!(target: "security", "Guest user '{}' attempted to delete document {}", session.user_id, id);
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Guests are not allowed to delete documents".to_string(),
+                    )
+                        .into_response();
+                }
+            }
+            drop(_guard);
+
             if let Some(document) = get_document_by_id(&id).await {
                 if document.uploaded_by != session.user_id {
                     return (
